@@ -1,3 +1,28 @@
+# Copyright © 2010, EMC Corporation.
+# Redistribution and use in source and binary forms, with or without modification, 
+# are permitted provided that the following conditions are met:
+#
+#     + Redistributions of source code must retain the above copyright notice, 
+#       this list of conditions and the following disclaimer.
+#     + Redistributions in binary form must reproduce the above copyright 
+#       notice, this list of conditions and the following disclaimer in the 
+#       documentation and/or other materials provided with the distribution.
+#     + The name of EMC Corporation may not be used to endorse or promote 
+#       products derived from this software without specific prior written 
+#       permission.
+#
+#      THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
+#      "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED 
+#      TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR 
+#      PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS 
+#      BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+#      CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+#      SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+#      INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+#      CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+#      ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+#      POSSIBILITY OF SUCH DAMAGE.
+
 require 'test/unit'
 require 'tempfile'
 require 'EsuApi'
@@ -63,6 +88,16 @@ class Esutest < Test::Unit::TestCase
     # Read back the content
     content = @esu.read_object( id, nil, nil )
     assert_equal( "hello", content, "object content wrong" );
+  end
+  
+  def test_read_object_extent()
+    id =  @esu.create_object( nil, nil, "Hello World", "text/plain" )
+    assert_not_nil( id, "nil ID returned" );
+    @cleanup.push( id )
+
+    # Read back the content
+    content = @esu.read_object( id, EsuApi::Extent.new(4,3), nil )
+    assert_equal( "o W", content, "object content wrong" );
   end
   
   def test_update_object
@@ -166,7 +201,7 @@ print "Metadata: #{meta}\n"
     vid1 = @esu.version_object( id )
     
     # Change the content
-    @esu.update_object( id, nil, nil, "New content you should never see", "text/plain" )
+    @esu.update_object( id, nil, nil, "New content you should never see", nil, "text/plain" )
     
     # restore the first version
     @esu.restore_version( id, vid1 )
@@ -198,13 +233,18 @@ print "Metadata: #{meta}\n"
     
     # List tags and check membership
     objects = @esu.list_objects( "listable" );
-    assert_true( objects.include?(id), "Expected object to be listable" );
+    assert( objects.include?(id), "Expected object to be listable" );
     
-    objects = @esu.list_objects( "unlistable" )
-    assert_true( !objects.include?(id), "Expected object to not be unlistable" )
+    begin
+      objects = @esu.list_objects( "unlistable" )
+      fail( "Expected GET for unlistable to fail" )
+    rescue
+      #expected
+    end
+      
     
     objects = @esu.list_objects( "list/able/2" )
-    assert_true( objects.include?(id), "Expected object to be listable" )
+    assert( objects.include?(id), "Expected object to be listable" )
   end
   
   def test_list_objects_with_metadata
@@ -218,12 +258,14 @@ print "Metadata: #{meta}\n"
     
     # List tags and check membership
     objects = @esu.list_objects_with_metadata( "listable" );
-    assert_true( objects.include?(id), "Expected object to be listable" );
+    assert( objects.has_key?(id), "Expected object to be listable" );
     
-    oid = objects[ objects.index(id) ]
+    om = objects[ id ]
     
     # Check metadata
-    assert_equal( "foo", oid.meta['listable'], "Expected metadata to be set on object" )
+    assert_equal( "foo", om.user_metadata['listable'].value, "Expected metadata to be set on object" )
+    assert_equal( id, om.id(), "Expected ID to be set on object" )
+    
   end
   
   def test_get_listable_tags
@@ -259,6 +301,7 @@ print "Metadata: #{meta}\n"
 
     # Check tags
     tags = @esu.list_user_metadata_tags( id )
+    print( "Tags is #{tags}\n" )
     assert( tags.include?('listable'), "Metadata listable tag missing" );    
     assert( tags.include?('unlistable'), "Metadata unlistable tag missing" );    
     assert( tags.include?('list/able/2'), "Metadata list/able/2 tag missing" );    
@@ -276,7 +319,7 @@ print "Metadata: #{meta}\n"
     meta = {}
     meta['listable'] = EsuApi::Metadata.new( "listable", "xxx", true )
     meta['unlistable'] = EsuApi::Metadata.new( "unlistable", "yyy", false )
-    @esu.update_object( id, nil, meta, "New content here", "text/plain" )
+    @esu.update_object( id, nil, meta, "New content here", nil, "text/plain" )
 
     # Read back metadata and check
     meta = @esu.get_user_metadata( id )
@@ -292,9 +335,9 @@ print "Metadata: #{meta}\n"
   def test_list_directory()
     dir = '/' + randomstr( 8 )
     
-    file1 = EsuApi::ObjectPath.new( dir + '/' + randomstr( 8 ) )
-    file2 = EsuApi::ObjectPath.new( dir + '/' + randomstr( 8 ) )
-    dir2 = EsuApi::ObjectPath.new( dir + '/' + randomstr( 8 ) + '/' )
+    file1 = dir + '/' + randomstr( 8 )
+    file2 = dir + '/' + randomstr( 8 )
+    dir2 = dir + '/' + randomstr( 8 ) + '/'
     id1 = @esu.create_object_on_path( file1, nil, nil, nil, nil )
     @cleanup.push( id1 )
     id2 = @esu.create_object_on_path( file2, nil, nil, nil, nil )
@@ -302,10 +345,10 @@ print "Metadata: #{meta}\n"
     id3 = @esu.create_object_on_path( dir2, nil, nil, nil, nil )
     @cleanup.push( id3 )
     
-    dirlist = @esu.list_directory( EsuApi::ObjectPath.new( dir + '/' ) )
-    assert( dirlist.find { |entry| entry == file1 }, "could not locate " + file1 )
-    assert( dirlist.find { |entry| entry == file2 }, "could not locate " + file2 )
-    assert( dirlist.find { |entry| entry == dir2 }, "could not locate " + dir2 )
+    dirlist = @esu.list_directory( dir + '/' )
+    assert( dirlist.find { |entry| entry.path == file1 }, "could not locate " + file1 )
+    assert( dirlist.find { |entry| entry.path == file2 }, "could not locate " + file2 )
+    assert( dirlist.find { |entry| entry.path == dir2 }, "could not locate " + dir2 )
   end
  
   def test_get_all_metadata()
@@ -337,21 +380,12 @@ print "Metadata: #{meta}\n"
     expires += 3600
     url = @esu.get_shareable_url( id, expires )
     
-    uri = URI.parse( url )
-    io = uri.open()
+    # Read it back.
+    content = Net::HTTP.get( url )
     
-    assert_equal( text, io.readlines, "object content wrong" )
+    assert_equal( text, content, "object content wrong" )
   end
-  
-  def test_read_object_stream() 
-    text = "The quick brown fox jumped over the lazy dog"
-    id = @esu.create_object( nil, nil, text, 'text/plain' )
-    @cleanup.push( id )
     
-    io = @esu.read_object_stream( id )
-    assert_equal( text, io.readlines, "object content wrong" )
-  end
-  
   def test_checksum()
     text = "hello world"
     
@@ -362,13 +396,13 @@ print "Metadata: #{meta}\n"
   
   def test_create_checksum() 
     ck = EsuApi::Checksum.new( EsuApi::Checksum::SHA0 )
-    ObjectId id = @esu.create_object( nil, nil, "hello world", "text/plain", ck );
+    id = @esu.create_object( nil, nil, randomstr(1025), "text/plain", ck );
     @cleanup.push( id )
   end
   
   def test_rename()
-    op1 = EsuApi::ObjectPath.new( '/' + randomstr( 8 ) )
-    op2 = EsuApi::ObjectPath.new( '/' + randomstr( 8 ) )
+    op1 = '/' + randomstr( 8 )
+    op2 = '/' + randomstr( 8 )
     
     id = @esu.create_object_on_path( op1, nil, nil, "hello world", "text/plain" )
     @cleanup.push( id )
@@ -377,14 +411,14 @@ print "Metadata: #{meta}\n"
     @esu.rename( op1, op2 )
     
     # Check loading from new name
-    text = @esu.read_object( op2 )
+    text = @esu.read_object( op2, nil, nil )
     
-    assert_equals( "hello world", text, "Renamed object content wrong" )
+    assert_equal( "hello world", text, "Renamed object content wrong" )
   end
   
   def test_overwrite()
-    op1 = EsuApi::ObjectPath.new( '/' + randomstr( 8 ) )
-    op2 = EsuApi::ObjectPath.new( '/' + randomstr( 8 ) )
+    op1 = '/' + randomstr( 8 )
+    op2 = '/' + randomstr( 8 )
     
     id = @esu.create_object_on_path( op1, nil, nil, "hello world", "text/plain" )
     @cleanup.push( id )
@@ -397,15 +431,15 @@ print "Metadata: #{meta}\n"
     sleep( 5 )
     
     # Check loading from new name
-    text = @esu.read_object( op2 )
+    text = @esu.read_object( op2, nil, nil )
     
-    assert_equals( "hello world", text, "Renamed object content wrong" )
+    assert_equal( "hello world", text, "Renamed object content wrong" )
   end
       
   
   def test_get_service_information()
     si = @esu.get_service_information()
-    
+    print( "Atmos version: #{si.atmos_version}\n")
     assert_not_nil( si.atmos_version, "Atmos version is nil" ) 
   end
   
@@ -415,12 +449,12 @@ print "Metadata: #{meta}\n"
   def test_read_checksum()
     meta = {}
     meta["policy"] = EsuApi::Metadata.new( "policy", "erasure", false )
-    ck = EsuApi::Checksum.new( EsuApi::Checksum::SHA0 )
-    id = @esu.create_object( nil, meta, "hello world", "text/plain", ck )
+    ck1 = EsuApi::Checksum.new( EsuApi::Checksum::SHA0 )
+    id = @esu.create_object( nil, meta, "hello world", "text/plain", ck1 )
     @cleanup.push( id )
     
     ck2 = EsuApi::Checksum.new( EsuApi::Checksum::SHA0 )
-    text = @esu.read_object( id, nil, nil, ck2 )
+    text = @esu.read_object( id, nil, ck2 )
     assert_equal( "hello world", text, "object content wrong" )
     assert_equal( ck1.to_s(), ck2.to_s(), "checksums don't match" )
     assert_equal( ck2.expected_value, ck2.to_s(), "checksum doesn't match expected value" )
