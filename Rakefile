@@ -1,4 +1,5 @@
 require 'rubygems'
+require 'rake/testtask'
 require 'rake/gempackagetask'
 
 task :default => [:gem]
@@ -23,4 +24,8 @@ Rake::GemPackageTask.new(spec) do |pkg|
     pkg.need_zip = true
     pkg.need_tar = true
 end
- 
+
+desc "Run tests."
+Rake::TestTask.new do | t |
+  t.test_files = FileList['test/**/*.rb']
+end
