@@ -23,6 +23,7 @@
 #      ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
 #      POSSIBILITY OF SUCH DAMAGE.
 
+require 'rubygems' # for 1.8 compat
 require 'net/http'
 require 'net/https'
 require 'uri'
@@ -57,12 +58,24 @@ module EsuApi
     # * port - the port to connect with
     # * uid - the Atmos UID
     # * secret - the base64-encoded secret key for the UID
-    def initialize( host, port, uid, secret )
+    # * ssl - use ssl (or not). default false
+    def initialize( host, port, uid, secret, ssl = false )
       @host = host
       @port = port
       @uid = uid
       @secret = Base64.decode64( secret )
-      @session = Net::HTTP.new( host, port ).start
+      @session = Net::HTTP.new( host, port )
+
+      # begin ssl support
+      @session.use_ssl = true if ssl
+      # ruby ships without any default ssl cert packages.
+      # the following disables ssl certificate validation- in production
+      # environments, it would be best to install the appropriate root
+      # certificates and re-enable verification.
+      @session.verify_mode = OpenSSL::SSL::VERIFY_NONE if ssl
+
+      # connect
+      @session.start
 
       @context = "/rest"
     end
