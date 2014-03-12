@@ -99,19 +99,19 @@ class Esutest < Test::Unit::TestCase
     content = @esu.read_object( id, EsuApi::Extent.new(4,3), nil )
     assert_equal( "o W", content, "object content wrong" );
   end
-  
-  def test_update_object
+
+  def test_update_object_simple
     id =  @esu.create_object( nil, nil, "hello", "text/plain" )
     assert_not_nil( id, "nil ID returned" );
     @cleanup.push( id )
-    
+
     # Change the content
-    @esu.update_object( id, nil, nil, "Hello World", "text/plain" )
+    @esu.update_object( id, nil, nil, "Hello World", nil, "text/plain" )
 
     # Read back the content
     content = @esu.read_object( id, nil, nil )
     assert_equal( "Hello World", content, "object content wrong" );
-    
+
   end
   
 
@@ -467,7 +467,7 @@ print "Metadata: #{meta}\n"
   # contain a space.
   #
   def randomstr( len )
-    chars = ("a".."z").to_a + ("A".."Z").to_a + ("0".."9").to_a + " ".to_a
+    chars = ("a".."z").to_a + ("A".."Z").to_a + ("0".."9").to_a + [" "]
     endchars = ("a".."z").to_a + ("A".."Z").to_a + ("0".."9").to_a
     newstr = ""
     newstr << endchars[rand(endchars.size-1)]
