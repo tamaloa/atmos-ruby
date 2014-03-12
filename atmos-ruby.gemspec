@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
   s.platform = Gem::Platform::RUBY
   s.summary = "Ruby API wrapper for EMC Atmos"
   s.name = 'atmos-ruby'
-  s.version = "1.4.0.7"
+  s.version = "1.4.0.7-ssl"
   s.homepage = "http://code.google.com/p/atmos-ruby"
   s.authors = ['jasoncwik']
   s.requirements << 'none'
