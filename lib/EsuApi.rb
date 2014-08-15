@@ -253,7 +253,7 @@ module EsuApi
       headers["content-length"] = String(data.length())
 
       if( extent != nil )
-        headers["range"] = "${extent}"
+        headers["range"] = "#{extent}"
       end
 
       if( acl )
